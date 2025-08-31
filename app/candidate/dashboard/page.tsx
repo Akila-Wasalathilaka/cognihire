@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiRequest } from '../../../utils/api';
 
 interface Assessment {
   id: string;
@@ -72,7 +73,7 @@ export default function CandidateDashboard() {
   const fetchData = async () => {
     try {
       // Fetch current assessment
-      const assessmentResponse = await fetch('/api/assessments/current');
+      const assessmentResponse = await apiRequest('http://localhost:8000/assessments/current');
       if (assessmentResponse.ok) {
         const assessmentData = await assessmentResponse.json();
         setAssessment(assessmentData.assessment);
@@ -84,10 +85,10 @@ export default function CandidateDashboard() {
       }
 
       // Fetch user profile
-      const profileResponse = await fetch('/api/auth/profile');
+      const profileResponse = await apiRequest('http://localhost:8000/auth/profile');
       if (profileResponse.ok) {
         const profileData = await profileResponse.json();
-        setUser(profileData.user);
+        setUser(profileData);
       }
 
       setLoading(false);
@@ -100,12 +101,12 @@ export default function CandidateDashboard() {
   const fetchAssessmentResults = async (assessmentId: string) => {
     try {
       // Fetch detailed assessment results
-      const response = await fetch(`/api/assessments/${assessmentId}`);
+      const response = await apiRequest(`http://localhost:8000/assessments/${assessmentId}`);
       if (response.ok) {
         const data = await response.json();
 
         // Get detailed item results
-        const itemsResponse = await fetch(`/api/assessments/${assessmentId}/items`);
+        const itemsResponse = await apiRequest(`http://localhost:8000/assessments/${assessmentId}/items`);
         if (itemsResponse.ok) {
           const itemsData = await itemsResponse.json();
 
@@ -162,7 +163,7 @@ export default function CandidateDashboard() {
     if (!assessment) return;
 
     try {
-      const response = await fetch(`/api/reports/${assessment.id}/pdf`);
+      const response = await apiRequest(`http://localhost:8000/reports/${assessment.id}/pdf`);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -184,10 +185,12 @@ export default function CandidateDashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await apiRequest('http://localhost:8000/auth/logout', { method: 'POST' });
+      localStorage.removeItem('access_token');
       router.push('/login');
     } catch (err) {
       console.error('Logout failed:', err);
+      localStorage.removeItem('access_token');
       router.push('/login');
     }
   };

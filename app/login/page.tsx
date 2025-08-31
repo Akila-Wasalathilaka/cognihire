@@ -17,7 +17,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('http://localhost:8000/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -27,16 +27,33 @@ export default function Login() {
 
       if (response.ok) {
         const data = await response.json();
-
-        // Redirect based on role
-        if (data.user.role === 'ADMIN') {
-          router.push('/admin/dashboard');
+        
+        // Store the access token
+        localStorage.setItem('access_token', data.access_token);
+        
+        // Get user profile to determine role
+        const profileResponse = await fetch('http://localhost:8000/auth/profile', {
+          headers: {
+            'Authorization': `Bearer ${data.access_token}`,
+          },
+        });
+        
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          
+          // Redirect based on role
+          if (profileData.role === 'ADMIN') {
+            router.push('/admin/dashboard');
+          } else {
+            router.push('/candidate/dashboard');
+          }
         } else {
+          // If profile fetch fails, default to candidate dashboard
           router.push('/candidate/dashboard');
         }
       } else {
         const errorData = await response.json();
-        setError(errorData.error || 'Login failed');
+        setError(errorData.detail || 'Login failed');
       }
     } catch (err) {
       setError('Network error');

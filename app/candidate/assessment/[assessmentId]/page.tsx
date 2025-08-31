@@ -60,7 +60,7 @@ export default function AssessmentPage() {
 
   const fetchAssessment = async () => {
     try {
-      const response = await fetch('/api/assessments/current');
+      const response = await fetch('http://localhost:8000/assessments/current');
       if (!response.ok) {
         throw new Error('Failed to fetch assessment');
       }
@@ -75,7 +75,7 @@ export default function AssessmentPage() {
 
   const handleStart = async () => {
     try {
-      const response = await fetch(`/api/assessments/${assessmentId}/start`, {
+      const response = await fetch(`http://localhost:8000/assessments/${assessmentId}/start`, {
         method: 'POST',
       });
 
@@ -101,7 +101,7 @@ export default function AssessmentPage() {
     } else {
       // Complete assessment
       try {
-        const response = await fetch(`/api/assessments/${assessmentId}/complete`, {
+        const response = await fetch(`http://localhost:8000/assessments/${assessmentId}/complete`, {
           method: 'POST',
         });
 
@@ -122,7 +122,7 @@ export default function AssessmentPage() {
     if (!currentItem) return;
 
     try {
-      const response = await fetch(`/api/assessments/${assessmentId}/items/${currentItem.id}/start`, {
+      const response = await fetch(`http://localhost:8000/assessments/${assessmentId}/items/${currentItem.id}/start`, {
         method: 'POST',
       });
 
@@ -144,7 +144,7 @@ export default function AssessmentPage() {
 
     try {
       // Submit game results
-      const response = await fetch(`/api/assessments/${assessmentId}/items/${currentItem.id}/submit`, {
+      const response = await fetch(`http://localhost:8000/assessments/${assessmentId}/items/${currentItem.id}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +182,7 @@ export default function AssessmentPage() {
 
   const handleCompleteAssessment = async () => {
     try {
-      const response = await fetch(`/api/assessments/${assessmentId}/complete`, {
+      const response = await fetch(`http://localhost:8000/assessments/${assessmentId}/complete`, {
         method: 'POST',
       });
 

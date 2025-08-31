@@ -45,7 +45,7 @@ export default function Register() {
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
+      const response = await fetch('http://localhost:8000/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,8 +54,6 @@ export default function Register() {
           username: formData.username,
           password: formData.password,
           email: formData.email,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
           role: formData.role
         }),
       });
@@ -64,7 +62,7 @@ export default function Register() {
         router.push('/login?message=Registration successful! Please log in.');
       } else {
         const errorData = await response.json();
-        setError(errorData.error || 'Registration failed');
+        setError(errorData.detail || 'Registration failed');
       }
     } catch (err) {
       setError('Network error');
