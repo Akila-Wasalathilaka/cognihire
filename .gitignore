@@ -161,6 +161,10 @@ ssh-key-2025-08-22.key
 ssh-key-2025-08-31.key
 ssh-key-2025-08-31.key.pub
 
+# Archives
+*.tar.gz
+*.zip
+
 # Application specific
 /uploads/
 /temp/
