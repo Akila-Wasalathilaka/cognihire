@@ -24,15 +24,15 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     try {
       // Fetch candidates count
-      const candidatesResponse = await fetch('http://localhost:8000/admin/candidates?limit=1');
+      const candidatesResponse = await fetch('/api/candidates?limit=1');
       const candidatesData = await candidatesResponse.json();
 
       // Fetch assessments count
-      const assessmentsResponse = await fetch('http://localhost:8000/admin/assessments?limit=1');
+      const assessmentsResponse = await fetch('/api/assessments?limit=1');
       const assessmentsData = await assessmentsResponse.json();
 
       // Fetch job roles count
-      const jobRolesResponse = await fetch('http://localhost:8000/admin/job-roles?limit=1');
+      const jobRolesResponse = await fetch('/api/job-roles?limit=1');
       const jobRolesData = await jobRolesResponse.json();
 
       setStats({
@@ -51,7 +51,7 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8000/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/login');
     } catch (err) {
       console.error('Logout failed:', err);

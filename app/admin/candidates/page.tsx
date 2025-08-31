@@ -37,7 +37,7 @@ export default function AdminCandidatesPage() {
         params.append('is_active', statusFilter === 'active' ? 'true' : 'false');
       }
 
-      const response = await fetch(`http://localhost:8000/candidates?${params}`);
+      const response = await fetch(`/api/candidates?${params}`);
       if (!response.ok) {
         throw new Error('Failed to fetch candidates');
       }
@@ -54,7 +54,7 @@ export default function AdminCandidatesPage() {
   const handleStatusChange = async (candidateId: string, isActive: boolean) => {
     try {
       const endpoint = isActive ? `/candidates/${candidateId}/activate` : `/candidates/${candidateId}/deactivate`;
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+      const response = await fetch(`/api${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,7 +82,7 @@ export default function AdminCandidatesPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/candidates/${candidateId}`, {
+      const response = await fetch(`/api/candidates/${candidateId}`, {
         method: 'DELETE',
       });
 
@@ -104,7 +104,7 @@ export default function AdminCandidatesPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8000/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/login');
     } catch (err) {
       console.error('Logout failed:', err);

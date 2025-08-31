@@ -35,7 +35,7 @@ export default function AdminAssessmentsPage() {
         params.append('status', statusFilter);
       }
 
-      const response = await fetch(`http://localhost:8000/assessments?${params}`);
+      const response = await fetch(`/api/assessments?${params}`);
       if (!response.ok) {
         throw new Error('Failed to fetch assessments');
       }
@@ -55,7 +55,7 @@ export default function AdminAssessmentsPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/assessments/${assessmentId}`, {
+      const response = await fetch(`/api/assessments/${assessmentId}`, {
         method: 'DELETE',
       });
 
@@ -92,7 +92,7 @@ export default function AdminAssessmentsPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8000/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/login');
     } catch (err) {
       console.error('Logout failed:', err);
