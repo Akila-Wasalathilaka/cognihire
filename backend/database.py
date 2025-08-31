@@ -1,13 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import cx_Oracle
 import os
 
-# Oracle database connection
-DATABASE_URL = "oracle+cx_oracle://cognihire:YourPassword123@adb.ap-mumbai-1.oraclecloud.com:1521/cognihire_high"
+# Use SQLite for testing - switch to Oracle for production
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
-engine = create_engine(DATABASE_URL, echo=False)  # Set echo=False for production
+engine = create_engine(DATABASE_URL, echo=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

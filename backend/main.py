@@ -4,6 +4,12 @@ from database import engine, Base
 from routers import auth, users, assessments, games
 import os
 
+# Import new routers
+from routers.job_roles import router as job_roles_router
+from routers.candidates import router as candidates_router
+from routers.telemetry import router as telemetry_router
+from routers.reports import router as reports_router
+
 # Try to create database tables
 try:
     Base.metadata.create_all(bind=engine)
@@ -33,6 +39,10 @@ app.include_router(auth, prefix="/auth", tags=["Authentication"])
 app.include_router(users, prefix="/users", tags=["Users"])
 app.include_router(assessments, prefix="/assessments", tags=["Assessments"])
 app.include_router(games, prefix="/games", tags=["Games"])
+app.include_router(job_roles_router, prefix="/job-roles", tags=["Job Roles"])
+app.include_router(candidates_router, prefix="/candidates", tags=["Candidates"])
+app.include_router(telemetry_router, prefix="/telemetry", tags=["Telemetry"])
+app.include_router(reports_router, prefix="/reports", tags=["Reports"])
 
 @app.get("/")
 async def root():
