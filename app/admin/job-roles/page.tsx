@@ -26,7 +26,7 @@ export default function AdminJobRolesPage() {
 
   const fetchJobRoles = async () => {
     try {
-      const response = await fetch('http://localhost:8000/job-roles');
+      const response = await fetch('/api/job-roles');
       if (!response.ok) {
         throw new Error('Failed to fetch job roles');
       }
@@ -46,7 +46,7 @@ export default function AdminJobRolesPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/job-roles/${jobRoleId}`, {
+      const response = await fetch(`/api/job-roles/${jobRoleId}`, {
         method: 'DELETE',
       });
 
@@ -62,7 +62,7 @@ export default function AdminJobRolesPage() {
 
   const handleAnalyze = async (jobRoleId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/job-roles/${jobRoleId}/analyze`, {
+      const response = await fetch(`/api/job-roles/${jobRoleId}/analyze`, {
         method: 'POST',
       });
 
@@ -87,7 +87,7 @@ export default function AdminJobRolesPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8000/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/login');
     } catch (err) {
       console.error('Logout failed:', err);
