@@ -73,7 +73,7 @@ export default function CandidateDashboard() {
   const fetchData = async () => {
     try {
       // Fetch current assessment
-      const assessmentResponse = await apiRequest('http://localhost:8000/assessments/current');
+      const assessmentResponse = await apiRequest('/assessments/current');
       if (assessmentResponse.ok) {
         const assessmentData = await assessmentResponse.json();
         setAssessment(assessmentData.assessment);
@@ -85,7 +85,7 @@ export default function CandidateDashboard() {
       }
 
       // Fetch user profile
-      const profileResponse = await apiRequest('http://localhost:8000/auth/profile');
+      const profileResponse = await apiRequest('/auth/profile');
       if (profileResponse.ok) {
         const profileData = await profileResponse.json();
         setUser(profileData);
@@ -101,12 +101,12 @@ export default function CandidateDashboard() {
   const fetchAssessmentResults = async (assessmentId: string) => {
     try {
       // Fetch detailed assessment results
-      const response = await apiRequest(`http://localhost:8000/assessments/${assessmentId}`);
+      const response = await apiRequest(`/assessments/${assessmentId}`);
       if (response.ok) {
         const data = await response.json();
 
         // Get detailed item results
-        const itemsResponse = await apiRequest(`http://localhost:8000/assessments/${assessmentId}/items`);
+        const itemsResponse = await apiRequest(`/assessments/${assessmentId}/items`);
         if (itemsResponse.ok) {
           const itemsData = await itemsResponse.json();
 
@@ -163,7 +163,7 @@ export default function CandidateDashboard() {
     if (!assessment) return;
 
     try {
-      const response = await apiRequest(`http://localhost:8000/reports/${assessment.id}/pdf`);
+      const response = await apiRequest(`/reports/${assessment.id}/pdf`);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -185,7 +185,7 @@ export default function CandidateDashboard() {
 
   const handleLogout = async () => {
     try {
-      await apiRequest('http://localhost:8000/auth/logout', { method: 'POST' });
+      await apiRequest('/auth/logout', { method: 'POST' });
       localStorage.removeItem('access_token');
       router.push('/login');
     } catch (err) {

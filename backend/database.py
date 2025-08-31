@@ -5,7 +5,7 @@ import cx_Oracle
 import os
 
 # Oracle database connection
-DATABASE_URL = os.getenv("DATABASE_URL", "oracle+cx_oracle://username:password@hostname:port/service_name")
+DATABASE_URL = "oracle+cx_oracle://cognihire:YourPassword123@adb.ap-mumbai-1.oraclecloud.com:1521/cognihire_high"
 
 engine = create_engine(DATABASE_URL, echo=False)  # Set echo=False for production
 

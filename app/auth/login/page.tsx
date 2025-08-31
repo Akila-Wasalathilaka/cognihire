@@ -19,7 +19,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8000/auth/login', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -29,20 +29,20 @@ export default function LoginPage() {
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // Store the access token
         localStorage.setItem('access_token', data.access_token);
-        
+
         // Get user profile to determine role
-        const profileResponse = await fetch('http://localhost:8000/auth/profile', {
+        const profileResponse = await fetch('/api/auth/profile', {
           headers: {
             'Authorization': `Bearer ${data.access_token}`,
           },
         });
-        
+
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
-          
+
           // Redirect based on role
           if (profileData.role === 'ADMIN') {
             router.push('/admin/dashboard');
