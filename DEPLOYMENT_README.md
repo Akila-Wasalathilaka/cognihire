@@ -1,234 +1,367 @@
-# CogniHire Production Deployment Guide
+# 🚀 CogniHire Production Deployment Guide
 
-## Overview
-This guide provides step-by-step instructions for deploying the CogniHire cognitive assessment platform to Oracle Cloud or any cloud provider.
+This guide provides comprehensive deployment instructions for the CogniHire cognitive assessment platform on Oracle Free Tier Ubuntu VM and other cloud providers.
 
-## Prerequisites
+## 📋 Quick Start Options
 
-### Oracle Cloud Setup
-1. **Oracle Autonomous Database**:
-   - Create an Oracle Autonomous Database instance
-   - Note down the connection details (host, port, service name)
-   - Create database user and password
-   - Configure network access rules
+### Option 1: Oracle Free Tier Ubuntu VM (Recommended for Free Tier)
 
-2. **Compute Instance**:
-   - Ubuntu 22.04 LTS instance (VM.Standard.E2.1.Micro or higher)
-   - At least 2GB RAM, 50GB storage
-   - Security list configured for ports 80, 443, 22
-
-### Environment Variables
-Create a `.env` file with the following variables:
-
+#### Automated Deployment
 ```bash
-# Database Configuration
-DATABASE_URL=oracle+cx_oracle://username:password@host:port/service_name
+# 1. Upload project files to /home/ubuntu/cognihire
+scp -r /path/to/cognihire ubuntu@your-vm-ip:/home/ubuntu/
 
-# Authentication
-SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# CORS Configuration
-CORS_ORIGINS=https://yourdomain.com,http://localhost:3000
-
-# Oracle Database Credentials (for Docker)
-ORACLE_PASSWORD=your_oracle_password
-APP_USER=your_app_username
-APP_USER_PASSWORD=your_app_password
-
-# Frontend Configuration
-NEXT_PUBLIC_API_URL=https://yourdomain.com/api
+# 2. Make script executable and run
+chmod +x /home/ubuntu/cognihire/deploy.sh
+cd /home/ubuntu/cognihire
+./deploy.sh
 ```
 
-## Deployment Methods
+**What this does:**
+- ✅ Installs Node.js 20, Python 3, Nginx
+- ✅ Sets up FastAPI backend with SQLite database
+- ✅ Builds Next.js frontend for production
+- ✅ Creates systemd services for auto-start
+- ✅ Configures Nginx reverse proxy
+- ✅ Initializes database with sample data
+- ✅ Sets up firewall and security
 
-### Method 1: Docker Deployment (Recommended)
+#### Access Your Application
+- **Frontend**: `http://your-vm-public-ip`
+- **Backend API**: `http://your-vm-public-ip/api/`
+- **API Docs**: `http://your-vm-public-ip/api/docs`
+- **Default Admin**: `admin` / `admin123` (change immediately!)
 
-1. **Clone the repository**:
+### Option 2: Oracle Autonomous Database + Docker
+
+For full Oracle database integration with Docker containers.
+
+## 🛠️ Prerequisites
+
+### Oracle Free Tier Ubuntu VM
+- Ubuntu 20.04 or later
+- At least 1GB RAM (Free Tier limit)
+- SSH access configured
+- Project files uploaded
+
+### Oracle Autonomous Database (Optional)
+- Oracle Autonomous Database instance
+- Database user and password
+- Network access rules configured
+
+## 📁 Project Structure for Deployment
+
+Ensure your project has these files:
+```
+cognihire/
+├── deploy.sh                 # Main deployment script
+├── cognihire-backend.service # Systemd service for backend
+├── cognihire-frontend.service # Systemd service for frontend
+├── nginx-cognihire.conf     # Nginx configuration
+├── backend/
+│   ├── requirements.txt      # Python dependencies
+│   ├── init_db.py           # Database initialization
+│   └── .env.example         # Backend environment template
+├── .env.local.example       # Frontend environment template
+└── DEPLOYMENT_README.md     # This file
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+#### Backend (.env)
+```bash
+DATABASE_URL=sqlite:///./prod.db
+SECRET_KEY=your-super-secret-jwt-key
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
+
+#### Frontend (.env.local)
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXTAUTH_SECRET=your-nextauth-secret
+NEXTAUTH_URL=http://localhost:3000
+```
+
+### Database Options
+
+#### SQLite (Default - Free Tier Friendly)
+- No additional setup required
+- File-based database
+- Perfect for Free Tier limitations
+- Automatic initialization with sample data
+
+#### Oracle Autonomous Database
+```bash
+DATABASE_URL=oracle+cx_oracle://username:password@host:port/service_name
+```
+
+## 🚀 Deployment Methods
+
+### Method 1: Automated Script (Free Tier)
+
+1. **Upload project** to `/home/ubuntu/cognihire`
+2. **Run deployment**:
    ```bash
-   git clone <your-repo-url>
-   cd cognihire-ui
-   ```
-
-2. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your actual values
-   ```
-
-3. **Deploy with Docker**:
-   ```bash
+   cd /home/ubuntu/cognihire
    chmod +x deploy.sh
-   ./deploy.sh --docker
+   ./deploy.sh
    ```
 
-### Method 2: Traditional Deployment
-
-1. **Clone and setup**:
+3. **Monitor deployment**:
    ```bash
-   git clone <your-repo-url>
-   cd cognihire-ui
+   sudo systemctl status cognihire-backend
+   sudo systemctl status cognihire-frontend
+   sudo systemctl status nginx
    ```
 
-2. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your actual values
-   ```
-
-3. **Deploy traditionally**:
-   ```bash
-   chmod +x deploy.sh
-   ./deploy.sh --traditional
-   ```
-
-## Database Setup
-
-### Oracle Autonomous Database Configuration
-
-1. **Create Database User**:
-   ```sql
-   CREATE USER cognihire IDENTIFIED BY your_password;
-   GRANT CONNECT, RESOURCE TO cognihire;
-   GRANT CREATE TABLE, CREATE VIEW TO cognihire;
-   ALTER USER cognihire QUOTA UNLIMITED ON USERS;
-   ```
-
-2. **Update Connection String**:
-   - Format: `oracle+cx_oracle://username:password@host:port/service_name`
-   - Example: `oracle+cx_oracle://cognihire:password123@adb.us-ashburn-1.oraclecloud.com:1521/dbname_high.adb.oraclecloud.com`
-
-## Post-Deployment Configuration
-
-### SSL Certificate (Let's Encrypt)
+### Method 2: Docker Deployment
 
 ```bash
+# Configure environment
+cp .env.example .env
+# Edit .env with your values
+
+# Deploy with Docker
+chmod +x deploy.sh
+./deploy.sh --docker
+```
+
+### Method 3: Traditional Deployment
+
+```bash
+# Configure environment
+cp .env.example .env
+# Edit .env with your values
+
+# Deploy traditionally
+chmod +x deploy.sh
+./deploy.sh --traditional
+```
+
+## 🔧 Manual Setup (If Script Fails)
+
+### System Dependencies
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs build-essential
+
+# Install Python
+sudo apt install -y python3 python3-venv python3-pip
+
+# Install Nginx
+sudo apt install -y nginx
+```
+
+### Backend Setup
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env
+python3 init_db.py
+```
+
+### Frontend Setup
+```bash
+npm install
+cp .env.local.example .env.local
+# Edit .env.local
+npm run build
+```
+
+### Services & Nginx
+```bash
+# Copy service files
+sudo cp cognihire-backend.service /etc/systemd/system/
+sudo cp cognihire-frontend.service /etc/systemd/system/
+
+# Copy Nginx config
+sudo cp nginx-cognihire.conf /etc/nginx/sites-available/cognihire
+sudo ln -s /etc/nginx/sites-available/cognihire /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Enable and start services
+sudo systemctl daemon-reload
+sudo systemctl enable cognihire-backend cognihire-frontend nginx
+sudo systemctl start cognihire-backend cognihire-frontend nginx
+```
+
+## 📊 Monitoring & Management
+
+### Service Status
+```bash
+# Check all services
+sudo systemctl status cognihire-backend cognihire-frontend nginx
+
+# View logs
+sudo journalctl -u cognihire-backend -f
+sudo journalctl -u cognihire-frontend -f
+sudo tail -f /var/log/nginx/access.log
+```
+
+### Health Checks
+```bash
+# Application health
+curl http://localhost/health
+
+# API health
+curl http://localhost:8000/docs
+
+# Frontend health
+curl http://localhost:3000
+```
+
+### Process Management
+```bash
+# Restart services
+sudo systemctl restart cognihire-backend
+sudo systemctl restart cognihire-frontend
+sudo systemctl restart nginx
+
+# Stop services
+sudo systemctl stop cognihire-backend cognihire-frontend nginx
+```
+
+## 🔒 Security & Production
+
+### SSL Setup
+```bash
 # Install Certbot
-sudo apt install snapd
-sudo snap install core; sudo snap refresh core
-sudo snap install --classic certbot
+sudo apt install -y certbot python3-certbot-nginx
 
 # Get certificate
 sudo certbot --nginx -d yourdomain.com
 
-# Configure auto-renewal
-sudo certbot renew --dry-run
+# Update environment variables for HTTPS
+NEXTAUTH_URL=https://yourdomain.com
+NEXT_PUBLIC_API_URL=https://yourdomain.com/api
 ```
 
-### Firewall Configuration
-
+### Firewall
 ```bash
-# Allow necessary ports
-sudo ufw allow 80
-sudo ufw allow 443
-sudo ufw allow 22
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
 sudo ufw --force enable
 ```
 
-### Monitoring and Logs
+### Database Security
+- Change default admin password
+- Use strong database passwords
+- Regular backups (SQLite: copy the .db file)
+- For Oracle: Configure proper access rules
 
-```bash
-# Check application status
-pm2 status
-
-# View application logs
-pm2 logs
-
-# Check Nginx status
-sudo systemctl status nginx
-
-# View Nginx logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-```
-
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Database Connection Failed**:
-   - Verify DATABASE_URL format
-   - Check Oracle Autonomous Database network access
-   - Ensure database user has proper permissions
+1. **Services won't start**:
+   ```bash
+   sudo journalctl -u cognihire-backend -n 50
+   sudo journalctl -u cognihire-frontend -n 50
+   ```
 
-2. **Application Won't Start**:
-   - Check environment variables
-   - Verify all dependencies are installed
-   - Check application logs: `pm2 logs`
+2. **Database errors**:
+   - Check DATABASE_URL in .env
+   - Verify file permissions for SQLite
+   - Test database connection
 
-3. **Nginx Configuration Issues**:
-   - Test configuration: `sudo nginx -t`
-   - Check syntax errors in nginx config
-   - Verify upstream servers are running
+3. **Nginx issues**:
+   ```bash
+   sudo nginx -t
+   sudo systemctl status nginx
+   ```
 
-### Health Checks
+4. **Port conflicts**:
+   ```bash
+   sudo netstat -tlnp | grep :3000
+   sudo netstat -tlnp | grep :8000
+   sudo netstat -tlnp | grep :80
+   ```
 
+### Performance Issues
+- Monitor memory usage: `htop` or `free -h`
+- Check disk space: `df -h`
+- View application logs for errors
+- Restart services if needed
+
+## 📈 Scaling & Optimization
+
+### Free Tier Optimizations
+- SQLite database (low resource usage)
+- Single instance deployment
+- Gzip compression enabled
+- Static file caching configured
+
+### Performance Monitoring
 ```bash
-# Backend health check
-curl http://localhost:8000/docs
+# System resources
+top
+htop
+free -h
+df -h
 
-# Frontend health check
-curl http://localhost:3000
-
-# Database connectivity test
-python3 -c "import cx_Oracle; print('Oracle client installed')"
+# Application metrics
+sudo journalctl -u cognihire-backend --since "1 hour ago" | grep -i error
 ```
 
-## Scaling and Performance
-
-### Database Optimization
-- Use connection pooling
-- Configure appropriate session limits
-- Monitor query performance
-
-### Application Scaling
-- Use PM2 clustering for multi-core utilization
-- Implement Redis for session storage (if needed)
-- Configure load balancer for multiple instances
-
-## Backup and Recovery
-
-### Database Backup
+### Backup Strategy
 ```bash
-# Oracle Autonomous Database automatic backups
-# Configure backup retention in Oracle Cloud Console
+# SQLite backup
+cp /home/ubuntu/cognihire/backend/prod.db /home/ubuntu/backups/prod_$(date +%Y%m%d).db
+
+# Application backup
+tar -czf /home/ubuntu/backups/app_$(date +%Y%m%d).tar.gz /home/ubuntu/cognihire
 ```
 
-### Application Backup
-```bash
-# Backup application files
-tar -czf backup-$(date +%Y%m%d).tar.gz /opt/cognihire
+## 🎯 Default Credentials
 
-# Backup environment configuration
-cp .env .env.backup
+**Important**: Change these immediately after first login!
+
+- **Username**: `admin`
+- **Password**: `admin123`
+
+## 📞 Support & Resources
+
+### Quick Commands
+```bash
+# Full system status
+sudo systemctl status cognihire-* nginx
+
+# View all logs
+sudo journalctl -u cognihire-backend cognihire-frontend nginx --since today
+
+# Restart everything
+sudo systemctl restart cognihire-backend cognihire-frontend nginx
 ```
 
-## Security Best Practices
-
-1. **Environment Variables**:
-   - Never commit secrets to version control
-   - Use strong, unique passwords
-   - Rotate secrets regularly
-
-2. **Network Security**:
-   - Configure security lists properly
-   - Use HTTPS in production
-   - Implement rate limiting
-
-3. **Application Security**:
-   - Keep dependencies updated
-   - Use secure headers
-   - Implement proper authentication
-
-## Support
-
-For issues or questions:
-- Check application logs
-- Verify configuration files
-- Test database connectivity
-- Review Oracle Cloud documentation
+### Oracle Cloud Resources
+- [Oracle Free Tier Documentation](https://docs.oracle.com/en/cloud/get-started/)
+- [Ubuntu on Oracle Cloud](https://docs.oracle.com/en/cloud/iaas/compute-iaas-cloud/)
+- [Oracle Autonomous Database](https://docs.oracle.com/en/cloud/paas/autonomous-database/)
 
 ---
 
-**Deployment completed!** Your CogniHire application should now be accessible at your configured domain.
+## ✅ Deployment Checklist
+
+- [ ] Oracle Free Tier Ubuntu VM created
+- [ ] SSH access configured
+- [ ] Project files uploaded
+- [ ] deploy.sh executed successfully
+- [ ] Services running (backend, frontend, nginx)
+- [ ] Application accessible via public IP
+- [ ] Default password changed
+- [ ] SSL certificate configured (optional)
+- [ ] Firewall properly configured
+- [ ] Backups scheduled (recommended)
+
+**🎉 Deployment Complete!** Your CogniHire application is now live on Oracle Free Tier!
