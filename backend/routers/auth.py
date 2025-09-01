@@ -23,6 +23,7 @@ class RegisterRequest(BaseModel):
     password: str
     role: str = "CANDIDATE"
     full_name: str = None
+    job_role_id: str = None
 
 class TokenData(BaseModel):
     username: str = None
@@ -181,8 +182,10 @@ async def register(register_data: RegisterRequest, db: Session = Depends(get_db)
         tenant_id=tenant.id,
         username=register_data.username,
         email=register_data.email,
+        full_name=register_data.full_name,
         password_hash=hashed_password,
-        role=register_data.role
+        role=register_data.role,
+        job_role_id=register_data.job_role_id
     )
     db.add(db_user)
 
@@ -201,7 +204,27 @@ async def register(register_data: RegisterRequest, db: Session = Depends(get_db)
     # Log registration action
     log_audit_action(db, db_user.id, "REGISTER", "USER", db_user.id, {"role": register_data.role})
 
-    return {"message": "User created successfully", "user_id": db_user.id}
+    # Create access token for automatic login
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token, jti, expire_time = create_access_token(
+        data={"sub": db_user.username, "role": db_user.role}, 
+        expires_delta=access_token_expires
+    )
+
+    return {
+        "message": "User created successfully", 
+        "user_id": db_user.id,
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": db_user.id,
+            "username": db_user.username,
+            "email": db_user.email,
+            "role": db_user.role,
+            "full_name": db_user.full_name,
+            "is_active": db_user.is_active
+        }
+    }
 
 @router.get("/profile")
 async def read_users_me(current_user: User = Depends(get_current_user)):

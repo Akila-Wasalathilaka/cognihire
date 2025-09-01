@@ -1,28 +1,41 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, JSON, DECIMAL, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from database import Base
+from database import Base, DATABASE_URL
 import uuid
+
+# Determine ID column type based on database
+def get_id_column():
+    if DATABASE_URL.startswith("oracle"):
+        return Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    else:
+        return Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+
+def get_string_column(length=None):
+    if DATABASE_URL.startswith("oracle") and length:
+        return String(length)
+    else:
+        return String(length) if length else String
 
 class Tenant(Base):
     __tablename__ = "tenants"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String(200), nullable=False)
-    subdomain = Column(String(200), unique=True)
+    id = get_id_column()
+    name = Column(get_string_column(200), nullable=False)
+    subdomain = Column(get_string_column(200), unique=True)
     created_at = Column(DateTime, default=func.now())
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    tenant_id = Column(String, ForeignKey("tenants.id"))
-    email = Column(String(320), unique=True)
-    username = Column(String(64), unique=True, nullable=False)
-    full_name = Column(String(200))
-    password_hash = Column(String(255), nullable=False)
-    role = Column(String(16), nullable=False)  # ADMIN, CANDIDATE
-    job_role_id = Column(String, ForeignKey("job_roles.id"))
+    id = get_id_column()
+    tenant_id = Column(String(36), ForeignKey("tenants.id"))
+    email = Column(get_string_column(320), unique=True)
+    username = Column(get_string_column(64), unique=True, nullable=False)
+    full_name = Column(get_string_column(200))
+    password_hash = Column(get_string_column(255), nullable=False)
+    role = Column(get_string_column(16), nullable=False)  # ADMIN, CANDIDATE
+    job_role_id = Column(String(36), ForeignKey("job_roles.id"))
     is_active = Column(Boolean, default=True)
     mfa_enabled = Column(Boolean, default=False)
     last_login_at = Column(DateTime)
