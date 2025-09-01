@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { api } from '@/lib/api/client';
+import type { RegisterRequest } from '@/types/api';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -12,7 +14,7 @@ export default function Register() {
     email: '',
     firstName: '',
     lastName: '',
-    role: 'CANDIDATE'
+    role: 'CANDIDATE' as 'CANDIDATE' | 'ADMIN'
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -45,27 +47,19 @@ export default function Register() {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          password: formData.password,
-          email: formData.email,
-          role: formData.role
-        }),
-      });
+      const registerData: RegisterRequest = {
+        username: formData.username,
+        password: formData.password,
+        email: formData.email,
+        role: formData.role,
+        full_name: `${formData.firstName} ${formData.lastName}`.trim()
+      };
 
-      if (response.ok) {
-        router.push('/login?message=Registration successful! Please log in.');
-      } else {
-        const errorData = await response.json();
-        setError(errorData.detail || 'Registration failed');
-      }
+      await api.register(registerData);
+      router.push('/auth/login?message=Registration successful! Please log in.');
     } catch (err) {
-      setError('Network error');
+      console.error('Registration error:', err);
+      setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setIsLoading(false);
     }
@@ -241,7 +235,7 @@ export default function Register() {
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-300">
               Already have an account?{' '}
-              <Link href="/login" className="font-medium text-blue-400 hover:text-blue-300 transition-colors">
+              <Link href="/auth/login" className="font-medium text-blue-400 hover:text-blue-300 transition-colors">
                 Sign in here
               </Link>
             </p>

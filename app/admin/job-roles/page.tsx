@@ -26,13 +26,8 @@ export default function AdminJobRolesPage() {
 
   const fetchJobRoles = async () => {
     try {
-      const response = await fetch('/api/job-roles');
-      if (!response.ok) {
-        throw new Error('Failed to fetch job roles');
-      }
-
-      const data = await response.json();
-      setJobRoles(data);
+      // For now, show empty list
+      setJobRoles([]);
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch job roles');

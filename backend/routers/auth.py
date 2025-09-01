@@ -315,3 +315,9 @@ async def update_user_status(
     )
 
     return {"message": "User status updated successfully"}
+
+@router.post("/logout")
+async def logout(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Log logout action
+    log_audit_action(db, current_user.id, "LOGOUT", "USER", current_user.id)
+    return {"message": "Logged out successfully"}

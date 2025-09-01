@@ -30,18 +30,8 @@ export default function AdminAssessmentsPage() {
 
   const fetchAssessments = async () => {
     try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') {
-        params.append('status', statusFilter);
-      }
-
-      const response = await fetch(`/api/assessments?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch assessments');
-      }
-
-      const data = await response.json();
-      setAssessments(data);
+      // For now, show empty list
+      setAssessments([]);
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch assessments');

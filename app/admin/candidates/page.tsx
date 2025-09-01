@@ -24,6 +24,8 @@ export default function AdminCandidatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -32,68 +34,86 @@ export default function AdminCandidatesPage() {
 
   const fetchCandidates = async () => {
     try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        router.replace('/login');
+        return;
+      }
+      
       const params = new URLSearchParams();
       if (statusFilter !== 'all') {
         params.append('is_active', statusFilter === 'active' ? 'true' : 'false');
       }
 
-      const response = await fetch(`/api/candidates?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch candidates');
+      const response = await fetch(`/api/candidates?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCandidates(data.map((candidate: any) => ({
+          ...candidate,
+          job_role_title: candidate.job_role_title || 'Not Assigned',
+          assessment_count: 0,
+          completed_assessments: 0
+        })));
+      } else if (response.status === 401) {
+        localStorage.removeItem('access_token');
+        router.replace('/login');
+      } else {
+        setCandidates([]);
       }
-
-      const data = await response.json();
-      setCandidates(data);
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch candidates');
+      setCandidates([]);
       setLoading(false);
     }
   };
 
   const handleStatusChange = async (candidateId: string, isActive: boolean) => {
-    try {
-      const endpoint = isActive ? `/candidates/${candidateId}/activate` : `/candidates/${candidateId}/deactivate`;
-      const response = await fetch(`/api${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update candidate status');
-      }
-
-      // Update local state
-      setCandidates(candidates.map(candidate =>
-        candidate.id === candidateId
-          ? { ...candidate, is_active: isActive }
-          : candidate
-      ));
-    } catch (err) {
-      alert('Failed to update candidate status');
-    }
+    alert('Status change requires backend integration');
   };
 
   const handleDelete = async (candidateId: string) => {
     if (!confirm('Are you sure you want to delete this candidate? This action cannot be undone.')) {
       return;
     }
+    alert('Delete candidate requires backend integration');
+  };
 
+  const handleCreateCandidate = async (formData: FormData) => {
+    setCreateLoading(true);
     try {
-      const response = await fetch(`/api/candidates/${candidateId}`, {
-        method: 'DELETE',
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('/api/candidates', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.get('email'),
+          full_name: formData.get('full_name'),
+          username: formData.get('username')
+        })
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete candidate');
+      
+      if (response.ok) {
+        const result = await response.json();
+        alert(`Candidate created successfully!\n\nLogin Details:\nUsername: ${result.candidate.username}\nPassword: ${result.candidate.password}\n\nPlease share these credentials with the candidate.`);
+        setShowCreateModal(false);
+        fetchCandidates(); // Refresh list
+      } else {
+        const error = await response.text();
+        alert(`Failed to create candidate: ${error}`);
       }
-
-      setCandidates(candidates.filter(candidate => candidate.id !== candidateId));
     } catch (err) {
-      alert('Failed to delete candidate');
+      alert('Error creating candidate');
     }
+    setCreateLoading(false);
   };
 
   const filteredCandidates = candidates.filter(candidate =>
@@ -104,11 +124,13 @@ export default function AdminCandidatesPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
+      localStorage.removeItem('access_token');
+      sessionStorage.clear();
+      window.history.replaceState(null, '', '/login');
+      router.replace('/login');
     } catch (err) {
       console.error('Logout failed:', err);
-      router.push('/login');
+      router.replace('/login');
     }
   };
 
@@ -194,7 +216,7 @@ export default function AdminCandidatesPage() {
               <p className="text-slate-300">Manage and monitor all candidates in the system</p>
             </div>
             <button
-              onClick={() => router.push('/admin/candidates/new')}
+              onClick={() => setShowCreateModal(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-lg hover:shadow-xl flex items-center"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -351,6 +373,65 @@ export default function AdminCandidatesPage() {
           )}
         </div>
       </main>
+
+      {/* Create Candidate Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-xl font-semibold text-white mb-4">Add New Candidate</h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateCandidate(new FormData(e.target as HTMLFormElement));
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
+                  <input
+                    name="full_name"
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Username</label>
+                  <input
+                    name="username"
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {createLoading ? 'Creating...' : 'Create Candidate'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

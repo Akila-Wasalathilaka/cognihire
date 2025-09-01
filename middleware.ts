@@ -1,45 +1,32 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { verifyAccessToken } from './lib/auth/middleware-auth';
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-// Routes that don't require authentication
-const publicRoutes = [
-  '/login',
-  '/auth/login',
-  '/auth/register',
-  '/auth/refresh',
-  '/',
-];
-
-// Admin-only routes
-const adminRoutes = [
-  '/admin',
-  '/api/admin',
-];
-
-// Candidate-only routes
-const candidateRoutes = [
-  '/candidate',
-  '/api/assessments',
-  '/api/auth/profile',
-  '/api/auth/change-password',
-];
-
-// Temporarily disabled middleware for debugging
 export function middleware(request: NextRequest) {
-  return NextResponse.next();
+  const token = request.cookies.get('access_token')?.value
+  const { pathname } = request.nextUrl
+
+  // Public routes that don't require authentication
+  const publicRoutes = ['/auth/login', '/auth/register', '/']
+  
+  // Check if the current path is public
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+  
+  // If accessing protected route without token, redirect to login
+  if (!isPublicRoute && !token) {
+    return NextResponse.redirect(new URL('/auth/login', request.url))
+  }
+  
+  // If accessing login with valid token, redirect to appropriate dashboard
+  if (isPublicRoute && token && pathname !== '/') {
+    // You can decode token here to check role and redirect accordingly
+    return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
-};
-
+}
