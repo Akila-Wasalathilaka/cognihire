@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useIntegrityTracking } from '@/lib/hooks/useIntegrityTracking';
 
 // Dynamic imports for games
 const NBackGame = dynamic(() => import('./NBackGame'), { ssr: false });
@@ -20,31 +19,10 @@ interface GameEngineProps {
   gameConfig: GameConfig;
   onComplete: (results: GameResult[]) => void;
   onProgress: (progress: number) => void;
-  assessmentId?: string;
-  itemId?: string;
-  enableIntegrityTracking?: boolean;
 }
 
-export default function GameEngine({
-  gameCode,
-  gameConfig,
-  onComplete,
-  onProgress,
-  assessmentId,
-  itemId,
-  enableIntegrityTracking = true
-}: GameEngineProps) {
+export default function GameEngine({ gameCode, gameConfig, onComplete, onProgress }: GameEngineProps) {
   const [error, setError] = useState<string | null>(null);
-
-  // Initialize integrity tracking if enabled and IDs are provided
-  const { reportIntegrityEvent } = useIntegrityTracking({
-    assessmentId: assessmentId || '',
-    itemId: itemId || '',
-    enabled: enableIntegrityTracking && !!assessmentId && !!itemId,
-    onIntegrityEvent: (event) => {
-      console.log('Integrity event:', event);
-    }
-  });
 
   const renderGame = () => {
     try {

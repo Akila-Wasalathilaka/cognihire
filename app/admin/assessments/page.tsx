@@ -25,16 +25,47 @@ export default function AdminAssessmentsPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Check authentication first
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.replace('/auth/login');
+      return;
+    }
     fetchAssessments();
-  }, [statusFilter]);
+  }, [statusFilter, router]);
 
   const fetchAssessments = async () => {
     try {
-      // For now, show empty list
-      setAssessments([]);
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        router.replace('/auth/login');
+        return;
+      }
+      
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
+
+      const response = await fetch(`/api/admin/assessments?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAssessments(data);
+      } else if (response.status === 401) {
+        localStorage.removeItem('access_token');
+        router.replace('/auth/login');
+      } else {
+        setAssessments([]);
+      }
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch assessments');
+      setAssessments([]);
       setLoading(false);
     }
   };
@@ -45,15 +76,19 @@ export default function AdminAssessmentsPage() {
     }
 
     try {
-      const response = await fetch(`/api/assessments/${assessmentId}`, {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`/api/admin/assessments/${assessmentId}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to delete assessment');
+      if (response.ok) {
+        fetchAssessments(); // Refresh the list
+      } else {
+        alert('Failed to delete assessment');
       }
-
-      setAssessments(assessments.filter(assessment => assessment.id !== assessmentId));
     } catch (err) {
       alert('Failed to delete assessment');
     }
@@ -83,10 +118,10 @@ export default function AdminAssessmentsPage() {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
+      router.push('/auth/login');
     } catch (err) {
       console.error('Logout failed:', err);
-      router.push('/login');
+      router.push('/auth/login');
     }
   };
 

@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 import uuid
 from database import get_db
-from models import User, Tenant, AuditLog
+from models import User, Tenant, AuditLog, BlacklistedToken
 import os
 
 router = APIRouter()
@@ -56,9 +56,12 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
+    
+    # Add JWT ID for token tracking
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "jti": jti})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return encoded_jwt, jti, expire
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -69,8 +72,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        if username is None:
+        jti: str = payload.get("jti")
+        
+        if username is None or jti is None:
             raise credentials_exception
+            
+        # Check if token is blacklisted
+        blacklisted = db.query(BlacklistedToken).filter(BlacklistedToken.token_jti == jti).first()
+        if blacklisted:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been invalidated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
     except JWTError:
         raise credentials_exception
 
@@ -121,7 +136,7 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     log_audit_action(db, user.id, "LOGIN", "USER", user.id, {"ip": "system"})
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
+    access_token, jti, expires_at = create_access_token(
         data={"sub": user.username, "role": user.role}, expires_delta=access_token_expires
     )
 
@@ -317,7 +332,52 @@ async def update_user_status(
     return {"message": "User status updated successfully"}
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Log logout action
-    log_audit_action(db, current_user.id, "LOGOUT", "USER", current_user.id)
-    return {"message": "Logged out successfully"}
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    try:
+        # Decode token to get JTI
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        
+        if jti and exp:
+            # Convert exp timestamp to datetime
+            expires_at = datetime.utcfromtimestamp(exp)
+            
+            # Add token to blacklist
+            blacklisted_token = BlacklistedToken(
+                token_jti=jti,
+                user_id=current_user.id,
+                expires_at=expires_at
+            )
+            db.add(blacklisted_token)
+            db.commit()
+            
+        # Log logout action
+        log_audit_action(db, current_user.id, "LOGOUT", "USER", current_user.id)
+        
+        return {"message": "Logged out successfully"}
+    except Exception as e:
+        # Log logout anyway even if blacklisting fails
+        log_audit_action(db, current_user.id, "LOGOUT", "USER", current_user.id)
+        return {"message": "Logged out successfully"}
+
+@router.post("/cleanup-expired-tokens")
+async def cleanup_expired_tokens(
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Clean up expired blacklisted tokens (admin only)"""
+    now = datetime.utcnow()
+    expired_tokens = db.query(BlacklistedToken).filter(BlacklistedToken.expires_at < now).all()
+    
+    count = len(expired_tokens)
+    for token in expired_tokens:
+        db.delete(token)
+    
+    db.commit()
+    
+    return {"message": f"Cleaned up {count} expired tokens"}

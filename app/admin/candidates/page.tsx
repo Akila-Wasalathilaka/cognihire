@@ -29,14 +29,20 @@ export default function AdminCandidatesPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Check authentication first
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.replace('/auth/login');
+      return;
+    }
     fetchCandidates();
-  }, [statusFilter]);
+  }, [statusFilter, router]);
 
   const fetchCandidates = async () => {
     try {
       const token = localStorage.getItem('access_token');
       if (!token) {
-        router.replace('/login');
+        router.replace('/auth/login');
         return;
       }
       
@@ -45,7 +51,7 @@ export default function AdminCandidatesPage() {
         params.append('is_active', statusFilter === 'active' ? 'true' : 'false');
       }
 
-      const response = await fetch(`/api/candidates?${params}`, {
+      const response = await fetch(`/api/admin/candidates?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -57,12 +63,12 @@ export default function AdminCandidatesPage() {
         setCandidates(data.map((candidate: any) => ({
           ...candidate,
           job_role_title: candidate.job_role_title || 'Not Assigned',
-          assessment_count: 0,
-          completed_assessments: 0
+          assessment_count: candidate.assessment_count || 0,
+          completed_assessments: candidate.completed_assessments || 0
         })));
       } else if (response.status === 401) {
         localStorage.removeItem('access_token');
-        router.replace('/login');
+        router.replace('/auth/login');
       } else {
         setCandidates([]);
       }
@@ -74,21 +80,56 @@ export default function AdminCandidatesPage() {
   };
 
   const handleStatusChange = async (candidateId: string, isActive: boolean) => {
-    alert('Status change requires backend integration');
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`/api/admin/candidates/${candidateId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_active: isActive })
+      });
+      
+      if (response.ok) {
+        fetchCandidates(); // Refresh the list
+      } else {
+        alert('Failed to update candidate status');
+      }
+    } catch (err) {
+      alert('Error updating candidate status');
+    }
   };
 
   const handleDelete = async (candidateId: string) => {
     if (!confirm('Are you sure you want to delete this candidate? This action cannot be undone.')) {
       return;
     }
-    alert('Delete candidate requires backend integration');
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`/api/admin/candidates/${candidateId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        fetchCandidates(); // Refresh the list
+      } else {
+        alert('Failed to delete candidate');
+      }
+    } catch (err) {
+      alert('Error deleting candidate');
+    }
   };
 
   const handleCreateCandidate = async (formData: FormData) => {
     setCreateLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/candidates', {
+      const response = await fetch('/api/admin/candidates', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -103,7 +144,7 @@ export default function AdminCandidatesPage() {
       
       if (response.ok) {
         const result = await response.json();
-        alert(`Candidate created successfully!\n\nLogin Details:\nUsername: ${result.candidate.username}\nPassword: ${result.candidate.password}\n\nPlease share these credentials with the candidate.`);
+        alert(`Candidate created successfully!\n\nLogin Details:\nUsername: ${result.username}\nPassword: ${result.password}\n\nPlease share these credentials with the candidate.`);
         setShowCreateModal(false);
         fetchCandidates(); // Refresh list
       } else {
@@ -126,11 +167,11 @@ export default function AdminCandidatesPage() {
     try {
       localStorage.removeItem('access_token');
       sessionStorage.clear();
-      window.history.replaceState(null, '', '/login');
-      router.replace('/login');
+      window.history.replaceState(null, '', '/auth/login');
+      router.replace('/auth/login');
     } catch (err) {
       console.error('Logout failed:', err);
-      router.replace('/login');
+      router.replace('/auth/login');
     }
   };
 

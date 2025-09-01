@@ -20,10 +20,10 @@ const nextConfig = {
       };
     }
 
-    // Handle pg (PostgreSQL) native module for all environments
+    // Handle oracledb native module for all environments
     config.externals = config.externals || [];
     config.externals.push({
-      'pg': 'commonjs pg',
+      'oracledb': 'commonjs oracledb',
     });
 
     // Additional externals for Edge Runtime
@@ -39,7 +39,7 @@ const nextConfig = {
 
   // Experimental features for better Edge Runtime support
   experimental: {
-    serverComponentsExternalPackages: ['pg'],
+    serverComponentsExternalPackages: ['oracledb'],
   },
 };
 

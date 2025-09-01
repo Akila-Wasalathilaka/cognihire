@@ -40,13 +40,12 @@ CREATE TABLE USERS (
   created_at      TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP
 );
 
--- Games table (moved up to avoid forward references)
-CREATE TABLE GAMES (
-  id              VARCHAR2(36) PRIMARY KEY,
-  code            VARCHAR2(64) UNIQUE NOT NULL,
-  title           VARCHAR2(200),
-  description     CLOB,
-  base_config     CLOB CHECK (base_config IS JSON)
+-- Candidate Profiles table
+CREATE TABLE CANDIDATE_PROFILES (
+  user_id         VARCHAR2(36) PRIMARY KEY REFERENCES USERS(id),
+  full_name       VARCHAR2(200),
+  job_role_id     VARCHAR2(36) REFERENCES JOB_ROLES(id),
+  metadata_json   CLOB CHECK (metadata_json IS JSON)
 );
 
 -- Job Roles table
@@ -60,12 +59,13 @@ CREATE TABLE JOB_ROLES (
   created_at      TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP
 );
 
--- Candidate Profiles table (now can reference JOB_ROLES)
-CREATE TABLE CANDIDATE_PROFILES (
-  user_id         VARCHAR2(36) PRIMARY KEY REFERENCES USERS(id),
-  full_name       VARCHAR2(200),
-  job_role_id     VARCHAR2(36) REFERENCES JOB_ROLES(id),
-  metadata_json   CLOB CHECK (metadata_json IS JSON)
+-- Games table
+CREATE TABLE GAMES (
+  id              VARCHAR2(36) PRIMARY KEY,
+  code            VARCHAR2(64) UNIQUE NOT NULL,
+  title           VARCHAR2(200),
+  description     CLOB,
+  base_config     CLOB CHECK (base_config IS JSON)
 );
 
 -- Game Trait Map table
@@ -151,5 +151,23 @@ CREATE INDEX idx_assessments_candidate_status ON ASSESSMENTS(candidate_id, statu
 CREATE INDEX idx_assessments_job_role ON ASSESSMENTS(job_role_id);
 CREATE INDEX idx_assessment_items_assessment_status ON ASSESSMENT_ITEMS(assessment_id, status);
 CREATE INDEX idx_role_game_package_job_role_order ON ROLE_GAME_PACKAGE(job_role_id, order_index);
+
+-- Insert default tenant
+INSERT INTO TENANTS (id, name, subdomain) VALUES ('default-tenant-id', 'Default Tenant', 'default');
+
+-- Insert sample games
+INSERT INTO GAMES (id, code, title, description, base_config) VALUES
+('game-nback-id', 'NBACK', 'N-Back Task', 'Working memory assessment', '{"timer": 300, "rounds": 3, "difficulty": "medium"}'),
+('game-stroop-id', 'STROOP', 'Stroop Test', 'Cognitive interference assessment', '{"timer": 180, "trials": 50, "colors": ["red","blue","green","yellow"]}'),
+('game-digit-span-id', 'DIGIT_SPAN', 'Digit Span', 'Short-term memory assessment', '{"timer": 240, "max_length": 9, "trials_per_length": 2}');
+
+-- Insert sample traits
+INSERT INTO GAME_TRAIT_MAP (id, game_id, trait, weight) VALUES
+('map-nback-memory', 'game-nback-id', 'memory', 0.7),
+('map-nback-attention', 'game-nback-id', 'attention', 0.3),
+('map-stroop-logic', 'game-stroop-id', 'logic', 0.6),
+('map-stroop-attention', 'game-stroop-id', 'attention', 0.4),
+('map-digit-memory', 'game-digit-span-id', 'memory', 0.8),
+('map-digit-attention', 'game-digit-span-id', 'attention', 0.2);
 
 COMMIT;

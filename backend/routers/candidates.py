@@ -3,17 +3,60 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import uuid
 from database import get_db
-from models import User, Tenant, CandidateProfile
+from models import User, Tenant, CandidateProfile, JobRole
 from routers.auth import get_current_admin_user, get_password_hash, log_audit_action
 import secrets
 import string
+import re
 
 router = APIRouter()
 
 class CreateCandidateRequest(BaseModel):
     email: str
     full_name: str
+    job_role_id: str = None
     username: str = None
+
+def generate_username_from_name(full_name: str) -> str:
+    """Generate username from full name by taking first name + first letter of last name"""
+    # Remove special characters and split by spaces
+    clean_name = re.sub(r'[^a-zA-Z\s]', '', full_name.strip())
+    name_parts = clean_name.lower().split()
+    
+    if len(name_parts) == 1:
+        # Only first name
+        return name_parts[0]
+    elif len(name_parts) >= 2:
+        # First name + first letter of last name
+        return f"{name_parts[0]}{name_parts[-1][0]}"
+    else:
+        # Fallback
+        return clean_name.lower().replace(' ', '')
+
+def generate_password(length: int = 8) -> str:
+    """Generate a secure random password"""
+    # Mix of uppercase, lowercase, digits and special characters
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    special = "!@#$%"
+    
+    # Ensure at least one character from each category
+    password = [
+        secrets.choice(uppercase),
+        secrets.choice(lowercase),
+        secrets.choice(digits),
+        secrets.choice(special)
+    ]
+    
+    # Fill the rest randomly
+    all_chars = uppercase + lowercase + digits + special
+    for _ in range(length - 4):
+        password.append(secrets.choice(all_chars))
+    
+    # Shuffle the password
+    secrets.SystemRandom().shuffle(password)
+    return ''.join(password)
 
 @router.post("/")
 async def create_candidate(
@@ -25,18 +68,25 @@ async def create_candidate(
     if db.query(User).filter(User.email == candidate_data.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Generate username if not provided
-    username = candidate_data.username
-    if not username:
-        username = candidate_data.email.split('@')[0]
+    # Validate job role if provided
+    job_role = None
+    if candidate_data.job_role_id:
+        job_role = db.query(JobRole).filter(JobRole.id == candidate_data.job_role_id).first()
+        if not job_role:
+            raise HTTPException(status_code=400, detail="Job role not found")
     
-    # Check if username already exists
-    if db.query(User).filter(User.username == username).first():
-        # Add random suffix if username exists
-        username = f"{username}_{secrets.randbelow(9999):04d}"
+    # Generate username from full name
+    base_username = generate_username_from_name(candidate_data.full_name)
+    username = base_username
     
-    # Generate random password
-    password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+    # Check if username already exists and add suffix if needed
+    counter = 1
+    while db.query(User).filter(User.username == username).first():
+        username = f"{base_username}{counter}"
+        counter += 1
+    
+    # Generate secure password
+    password = generate_password(8)
     
     # Get tenant
     tenant = db.query(Tenant).first()
@@ -58,7 +108,8 @@ async def create_candidate(
     # Create candidate profile
     profile = CandidateProfile(
         user_id=user.id,
-        full_name=candidate_data.full_name
+        full_name=candidate_data.full_name,
+        job_role_id=candidate_data.job_role_id
     )
     db.add(profile)
     
@@ -71,7 +122,12 @@ async def create_candidate(
         "CREATE_CANDIDATE", 
         "USER", 
         user.id, 
-        {"email": candidate_data.email, "full_name": candidate_data.full_name}
+        {
+            "email": candidate_data.email, 
+            "full_name": candidate_data.full_name,
+            "job_role_id": candidate_data.job_role_id,
+            "username": username
+        }
     )
     
     return {
@@ -81,7 +137,10 @@ async def create_candidate(
             "username": username,
             "email": candidate_data.email,
             "full_name": candidate_data.full_name,
-            "password": password  # Return password for admin to share with candidate
+            "job_role_id": candidate_data.job_role_id,
+            "job_role_title": job_role.title if job_role else None,
+            "password": password,  # Return password for admin to share with candidate
+            "login_instructions": f"Username: {username}, Password: {password}"
         }
     }
 

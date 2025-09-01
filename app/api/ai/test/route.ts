@@ -3,6 +3,15 @@ import { testAIConnection, generateGame, analyzeJobRole } from '../../../../util
 
 export async function GET(request: NextRequest) {
   try {
+    // Check if AI is configured
+    if (!process.env.MISTRAL_API_KEY) {
+      return NextResponse.json({
+        success: false,
+        error: 'AI service not configured',
+        details: 'MISTRAL_API_KEY environment variable is required'
+      }, { status: 503 });
+    }
+
     // Test the AI connection
     const connectionTest = await testAIConnection();
 

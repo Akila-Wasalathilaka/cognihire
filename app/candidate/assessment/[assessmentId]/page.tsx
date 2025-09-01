@@ -6,31 +6,26 @@ import GameEngine from '@/components/games/GameEngine';
 
 interface Assessment {
   id: string;
-  candidate_id: string;
-  job_role_id: string;
+  jobRoleId: string;
   status: string;
-  started_at: string;
-  completed_at: string;
-  total_score: number;
-  candidate_name: string;
-  job_role_title: string;
-  progress_percentage: number;
+  startedAt?: string;
+  totalScore?: number;
+  jobRole: {
+    title: string;
+    traits: any;
+    config: any;
+  };
 }
 
 interface AssessmentItem {
   id: string;
-  assessment_id: string;
-  game_id: string;
-  order_index: number;
-  timer_seconds: number;
-  server_started_at: string;
-  server_deadline_at: string;
-  status: string;
-  score: number;
-  metrics_json: any;
-  config_snapshot: any;
-  game_title: string;
-  game_code: string;
+  gameId: string;
+  gameCode: string;
+  gameTitle: string;
+  orderIndex: number;
+  timerSeconds?: number;
+  configOverride?: any;
+  baseConfig?: any;
 }
 
 export default function AssessmentPage() {
@@ -40,18 +35,15 @@ export default function AssessmentPage() {
 
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [items, setItems] = useState<AssessmentItem[]>([]);
-  const [currentItem, setCurrentItem] = useState<AssessmentItem | null>(null);
+  const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showGame, setShowGame] = useState(false);
 
   useEffect(() => {
-    if (assessmentId) {
-      fetchAssessment();
-    }
-  }, [assessmentId]);
+    fetchAssessment();
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -61,38 +53,29 @@ export default function AssessmentPage() {
       }, 1000);
     } else if (timeLeft === 0 && isActive) {
       // Auto-submit when time runs out
-      handleGameTimeout();
+      handleNext();
     }
     return () => clearInterval(interval);
   }, [isActive, timeLeft]);
 
   const fetchAssessment = async () => {
     try {
-      // Fetch assessment details
-      const assessmentResponse = await fetch(`http://localhost:8000/assessments/${assessmentId}`);
-      if (!assessmentResponse.ok) {
+      const response = await fetch('/api/assessments/current');
+      if (!response.ok) {
         throw new Error('Failed to fetch assessment');
       }
-      const assessmentData = await assessmentResponse.json();
-      setAssessment(assessmentData);
-
-      // Fetch assessment items
-      const itemsResponse = await fetch(`http://localhost:8000/assessments/${assessmentId}/items`);
-      if (itemsResponse.ok) {
-        const itemsData = await itemsResponse.json();
-        setItems(itemsData);
-      }
-
+      const data = await response.json();
+      setAssessment(data.assessment);
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch assessment');
+      setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
     }
   };
 
-  const handleStartAssessment = async () => {
+  const handleStart = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/assessments/${assessmentId}/start`, {
+      const response = await fetch(`/api/assessments/${assessmentId}/start`, {
         method: 'POST',
       });
 
@@ -100,137 +83,118 @@ export default function AssessmentPage() {
         throw new Error('Failed to start assessment');
       }
 
-      // Refresh assessment data
-      fetchAssessment();
+      const data = await response.json();
+      setItems(data.assessment.items);
+      setCurrentItemIndex(0);
+      setTimeLeft(data.assessment.items[0]?.timerSeconds || 300);
+      setIsActive(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start assessment');
     }
   };
 
-  const startGameItem = async (item: AssessmentItem) => {
+  const handleNext = async () => {
+    if (currentItemIndex < items.length - 1) {
+      setCurrentItemIndex(currentItemIndex + 1);
+      setTimeLeft(items[currentItemIndex + 1]?.timerSeconds || 300);
+      setIsActive(false);
+    } else {
+      // Complete assessment
+      try {
+        const response = await fetch(`/api/assessments/${assessmentId}/complete`, {
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to complete assessment');
+        }
+
+        alert('Assessment completed!');
+        router.push('/candidate/dashboard');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to complete assessment');
+      }
+    }
+  };
+
+  const handleStartGame = async () => {
+    const currentItem = items[currentItemIndex];
+    if (!currentItem) return;
+
     try {
-      const response = await fetch(`http://localhost:8000/assessments/items/${item.id}/start`, {
+      const response = await fetch(`/api/assessments/${assessmentId}/items/${currentItem.id}/start`, {
         method: 'POST',
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to start game');
+      if (response.ok) {
+        setIsActive(true);
+        setTimeLeft(currentItem.timerSeconds || 300);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to start game');
       }
-
-      const result = await response.json();
-
-      // Update item status
-      setItems(items =>
-        items.map(i => i.id === item.id ? { ...i, status: 'ACTIVE', server_started_at: result.server_started_at, server_deadline_at: result.server_deadline_at } : i)
-      );
-
-      setCurrentItem(item);
-      setTimeLeft(item.timer_seconds || 300);
-      setIsActive(true);
-      setShowGame(true);
     } catch (err) {
-      setError('Failed to start game');
+      setError('Network error');
     }
   };
 
   const handleGameComplete = async (results: any[]) => {
+    const currentItem = items[currentItemIndex];
     if (!currentItem) return;
 
     try {
-      // Calculate score and submit
-      const gameResult = results[0]; // Assuming single result for now
-
-      const submitResponse = await fetch(`http://localhost:8000/assessments/items/${currentItem.id}/submit`, {
+      // Submit game results
+      const response = await fetch(`/api/assessments/${assessmentId}/items/${currentItem.id}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          score: gameResult.score || 0,
-          metrics_json: gameResult.metrics || {},
-          response_time_ms: gameResult.responseTime || 0,
+          results,
+          score: calculateScore(results),
+          metrics: results
         }),
       });
 
-      if (!submitResponse.ok) {
-        throw new Error('Failed to submit game results');
+      if (response.ok) {
+        setIsActive(false);
+
+        // Move to next item or complete assessment
+        if (currentItemIndex < items.length - 1) {
+          setCurrentItemIndex(prev => prev + 1);
+        } else {
+          await handleCompleteAssessment();
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to submit results');
       }
-
-      // Update local state
-      setItems(items =>
-        items.map(i => i.id === currentItem.id ? { ...i, status: 'SUBMITTED', score: gameResult.score || 0 } : i)
-      );
-
-      setShowGame(false);
-      setIsActive(false);
-      setCurrentItem(null);
-
-      // Refresh assessment to check completion
-      fetchAssessment();
     } catch (err) {
-      setError('Failed to submit game results');
+      setError('Network error');
     }
   };
 
-  const handleGameTimeout = async () => {
-    if (!currentItem) return;
+  const calculateScore = (results: any[]): number => {
+    // Simple scoring based on accuracy
+    const correct = results.filter(r => r.correct).length;
+    return Math.round((correct / results.length) * 100);
+  };
 
+  const handleCompleteAssessment = async () => {
     try {
-      // Submit with zero score for timeout
-      const submitResponse = await fetch(`http://localhost:8000/assessments/items/${currentItem.id}/submit`, {
+      const response = await fetch(`/api/assessments/${assessmentId}/complete`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          score: 0,
-          metrics_json: { timeout: true },
-          response_time_ms: (currentItem.timer_seconds || 300) * 1000,
-        }),
       });
 
-      if (!submitResponse.ok) {
-        throw new Error('Failed to submit game results');
+      if (response.ok) {
+        router.push('/candidate/dashboard?completed=true');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to complete assessment');
       }
-
-      // Update local state
-      setItems(items =>
-        items.map(i => i.id === currentItem.id ? { ...i, status: 'SUBMITTED', score: 0 } : i)
-      );
-
-      setShowGame(false);
-      setIsActive(false);
-      setCurrentItem(null);
-
-      // Refresh assessment
-      fetchAssessment();
     } catch (err) {
-      setError('Failed to submit game results');
+      setError('Network error');
     }
-  };
-
-  const handleGameProgress = (progress: number) => {
-    // Could update progress indicator here
-    console.log('Game progress:', progress);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'ACTIVE':
-        return 'bg-blue-100 text-blue-800';
-      case 'SUBMITTED':
-        return 'bg-green-100 text-green-800';
-      case 'EXPIRED':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const formatStatus = (status: string) => {
-    return status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const formatTime = (seconds: number) => {
@@ -239,22 +203,17 @@ export default function AssessmentPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch('http://localhost:8000/auth/logout', { method: 'POST' });
-      router.push('/login');
-    } catch (err) {
-      console.error('Logout failed:', err);
-      router.push('/login');
-    }
+  const getProgressPercentage = () => {
+    if (items.length === 0) return 0;
+    return ((currentItemIndex + 1) / items.length) * 100;
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <p className="text-slate-300 text-lg">Loading assessment...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Loading assessment...</p>
         </div>
       </div>
     );
@@ -262,281 +221,205 @@ export default function AssessmentPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 flex items-center justify-center">
-        <div className="text-center bg-slate-800/50 backdrop-blur-sm p-8 rounded-lg shadow-lg border border-red-700 max-w-md">
-          <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-lg shadow-lg border border-red-200 max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Error Loading Assessment</h2>
-          <p className="text-red-300 mb-6">{error}</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Assessment</h2>
+          <p className="text-red-600 mb-6">{error}</p>
           <button
-            onClick={fetchAssessment}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+            onClick={() => router.push('/candidate/dashboard')}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
           >
-            Try Again
+            Back to Dashboard
           </button>
         </div>
       </div>
     );
   }
 
-  if (showGame && currentItem) {
+  if (!assessment) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
-        <GameEngine
-          gameCode={currentItem.game_code}
-          gameConfig={currentItem.config_snapshot || {}}
-          onComplete={handleGameComplete}
-          onProgress={handleGameProgress}
-          assessmentId={assessmentId}
-          itemId={currentItem.id}
-        />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-lg shadow-lg border border-gray-200 max-w-md">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">No Assessment Found</h2>
+          <p className="text-gray-600 mb-6">You don't have any active assessments at the moment.</p>
+          <button
+            onClick={() => router.push('/candidate/dashboard')}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
 
+  const currentItem = items[currentItemIndex];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Header */}
-      <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 shadow-lg">
+      <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-blue-400">CogniHire</h1>
+                <h1 className="text-2xl font-bold text-indigo-600">CogniHire</h1>
               </div>
-              {assessment && (
-                <div className="ml-6">
-                  <h2 className="text-lg font-semibold text-white">{assessment.job_role_title}</h2>
-                  <p className="text-sm text-slate-400">Cognitive Assessment</p>
-                </div>
-              )}
+              <div className="ml-6">
+                <h2 className="text-lg font-semibold text-gray-900">{assessment.jobRole.title}</h2>
+                <p className="text-sm text-gray-500">Cognitive Assessment</p>
+              </div>
             </div>
             <div className="flex items-center space-x-6">
               {items.length > 0 && (
                 <div className="text-center">
-                  <div className="text-sm text-slate-400">Progress</div>
-                  <div className="text-lg font-semibold text-blue-400">
-                    {items.filter(i => i.status === 'SUBMITTED').length} of {items.length}
+                  <div className="text-sm text-gray-500">Progress</div>
+                  <div className="text-lg font-semibold text-indigo-600">
+                    {currentItemIndex + 1} of {items.length}
                   </div>
                 </div>
               )}
               {isActive && (
                 <div className="text-center">
-                  <div className="text-sm text-slate-400">Time Left</div>
-                  <div className={`text-xl font-bold ${timeLeft < 60 ? 'text-red-400' : 'text-blue-400'}`}>
+                  <div className="text-sm text-gray-500">Time Left</div>
+                  <div className={`text-xl font-bold ${timeLeft < 60 ? 'text-red-600' : 'text-indigo-600'}`}>
                     {formatTime(timeLeft)}
                   </div>
                 </div>
               )}
-              <button
-                onClick={() => router.push('/candidate/dashboard')}
-                className="text-slate-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={handleLogout}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
-              >
-                Logout
-              </button>
             </div>
           </div>
         </div>
       </header>
 
       {/* Progress Bar */}
-      {assessment && items.length > 0 && (
-        <div className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700">
+      {items.length > 0 && (
+        <div className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-slate-300">Assessment Progress</span>
-              <span className="text-sm text-slate-400">{assessment.progress_percentage}% Complete</span>
+              <span className="text-sm font-medium text-gray-700">Assessment Progress</span>
+              <span className="text-sm text-gray-500">{Math.round(getProgressPercentage())}% Complete</span>
             </div>
-            <div className="w-full bg-slate-700 rounded-full h-2">
+            <div className="w-full bg-gray-200 rounded-full h-2">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${assessment.progress_percentage}%` }}
-              />
+                className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${getProgressPercentage()}%` }}
+              ></div>
             </div>
           </div>
         </div>
       )}
 
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        {/* Assessment Header */}
-        {assessment && (
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl shadow-lg border border-slate-700 overflow-hidden mb-8">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
-              <h3 className="text-xl font-semibold text-white flex items-center">
-                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Cognitive Assessment
-              </h3>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Job Role</label>
-                  <p className="text-lg font-semibold text-white">{assessment.job_role_title}</p>
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
+            <h3 className="text-xl font-semibold text-white flex items-center">
+              <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {currentItem ? currentItem.gameTitle : 'Assessment Overview'}
+            </h3>
+            <p className="text-indigo-100 mt-1">
+              {assessment.status === 'NOT_STARTED'
+                ? 'Click start to begin your cognitive assessment'
+                : currentItem
+                  ? `Complete this ${currentItem.gameCode} game to continue`
+                  : 'Assessment in progress'
+              }
+            </p>
+          </div>
+
+          <div className="p-6">
+            {assessment.status === 'NOT_STARTED' ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-10 h-10 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Status</label>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(assessment.status)}`}>
-                    {formatStatus(assessment.status)}
-                  </span>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">Ready to Start Your Assessment?</h3>
+                <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                  This assessment contains {items.length} cognitive games that will evaluate your mental abilities.
+                  Make sure you're in a quiet environment and ready to focus.
+                </p>
+                <button
+                  onClick={handleStart}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors shadow-lg hover:shadow-xl flex items-center mx-auto"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Start Assessment
+                </button>
+              </div>
+            ) : !isActive ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
                 </div>
-                {assessment.started_at && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Started At</label>
-                    <p className="text-white">
-                      {new Date(assessment.started_at).toLocaleDateString()} at {new Date(assessment.started_at).toLocaleTimeString()}
-                    </p>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">Ready for the Next Game?</h3>
+                <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                  {currentItem ? `Get ready to play ${currentItem.gameTitle}. You have ${currentItem.timerSeconds || 300} seconds to complete this game.` : 'Loading next game...'}
+                </p>
+                <button
+                  onClick={handleStartGame}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors shadow-lg hover:shadow-xl flex items-center mx-auto"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Start Game
+                </button>
+              </div>
+            ) : currentItem ? (
+              <div className="space-y-6">
+                {/* Timer Warning */}
+                {timeLeft < 60 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <span className="text-red-800 font-medium">Less than 1 minute remaining!</span>
+                    </div>
                   </div>
                 )}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Progress</label>
-                  <div className="flex items-center">
-                    <div className="w-full bg-slate-700 rounded-full h-2 mr-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${assessment.progress_percentage}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-slate-300">
-                      {assessment.progress_percentage}%
-                    </span>
-                  </div>
-                </div>
+
+                {/* Game Engine */}
+                <GameEngine
+                  gameCode={currentItem.gameCode}
+                  gameConfig={currentItem.configOverride || currentItem.baseConfig || {}}
+                  onComplete={handleGameComplete}
+                  onProgress={(progress) => {
+                    // Update progress if needed
+                  }}
+                />
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Assessment Actions */}
-        {assessment && assessment.status === 'NOT_STARTED' && (
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl shadow-lg border border-slate-700 overflow-hidden mb-8">
-            <div className="p-6 text-center">
-              <h3 className="text-lg font-medium text-white mb-4">Ready to Begin Your Assessment?</h3>
-              <p className="text-slate-300 mb-6">
-                This assessment will evaluate your cognitive abilities through a series of interactive games.
-                Please ensure you have a quiet environment and stable internet connection.
-              </p>
-              <button
-                onClick={handleStartAssessment}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors shadow-lg hover:shadow-xl flex items-center mx-auto"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Start Assessment
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Assessment Items */}
-        {assessment && assessment.status !== 'NOT_STARTED' && items.length > 0 && (
-          <div className="space-y-6">
-            <h3 className="text-xl font-semibold text-white">Assessment Games</h3>
-
-            {items.map((item, index) => (
-              <div key={item.id} className="bg-slate-800/50 backdrop-blur-sm rounded-xl shadow-lg border border-slate-700 overflow-hidden">
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h4 className="text-lg font-medium text-white mb-2">
-                        Game {index + 1}: {item.game_title}
-                      </h4>
-                      <p className="text-slate-300 mb-2">{item.game_code}</p>
-                      <div className="flex items-center space-x-4 text-sm text-slate-400">
-                        <span>Order: {item.order_index + 1}</span>
-                        {item.timer_seconds && <span>Time: {item.timer_seconds}s</span>}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mb-2 ${getStatusColor(item.status)}`}>
-                        {formatStatus(item.status)}
-                      </span>
-                      {item.score !== undefined && item.score !== null && (
-                        <div className="text-2xl font-bold text-blue-400">
-                          {item.score}%
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {item.status === 'PENDING' && (
-                    <button
-                      onClick={() => startGameItem(item)}
-                      className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-lg transition-colors shadow-sm"
-                    >
-                      Start Game
-                    </button>
-                  )}
-
-                  {item.status === 'ACTIVE' && (
-                    <div className="text-center">
-                      <div className="animate-pulse bg-blue-600 text-white font-medium py-2 px-6 rounded-lg">
-                        Game In Progress...
-                      </div>
-                    </div>
-                  )}
-
-                  {item.status === 'SUBMITTED' && (
-                    <div className="text-green-400 font-medium">
-                      ✓ Game Completed
-                    </div>
-                  )}
+            ) : (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
                 </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">No Game Available</h3>
+                <p className="text-gray-600">Unable to load the game. Please try again.</p>
               </div>
-            ))}
+            )}
           </div>
-        )}
-
-        {/* Completion Message */}
-        {assessment && assessment.status === 'COMPLETED' && (
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl shadow-lg border border-slate-700 overflow-hidden">
-            <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4">
-              <h3 className="text-xl font-semibold text-white flex items-center">
-                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Assessment Completed!
-              </h3>
-            </div>
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-white mb-2">Congratulations!</h3>
-              <p className="text-slate-300 mb-6">
-                You have successfully completed your cognitive assessment.
-                Your results will be reviewed by the hiring team.
-              </p>
-              {assessment.total_score && (
-                <div className="mb-6">
-                  <div className="text-3xl font-bold text-blue-400 mb-2">
-                    {assessment.total_score}%
-                  </div>
-                  <div className="text-slate-300">Overall Score</div>
-                </div>
-              )}
-              <button
-                onClick={() => router.push('/candidate/dashboard')}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
-              >
-                Return to Dashboard
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
       </main>
     </div>
   );

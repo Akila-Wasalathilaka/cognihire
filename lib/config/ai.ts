@@ -86,8 +86,8 @@ export const aiConfig = getAIConfig();
 const validation = validateAIConfig(aiConfig);
 if (!validation.isValid) {
   console.warn('AI Configuration Issues:', validation.errors);
-  // In development, we'll continue but log warnings
-  if (process.env.NODE_ENV === 'production') {
+  // Only throw in production runtime, not during build
+  if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
     throw new Error(`Invalid AI configuration: ${validation.errors.join(', ')}`);
   }
 }

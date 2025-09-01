@@ -19,8 +19,10 @@ class User(Base):
     tenant_id = Column(String, ForeignKey("tenants.id"))
     email = Column(String(320), unique=True)
     username = Column(String(64), unique=True, nullable=False)
+    full_name = Column(String(200))
     password_hash = Column(String(255), nullable=False)
     role = Column(String(16), nullable=False)  # ADMIN, CANDIDATE
+    job_role_id = Column(String, ForeignKey("job_roles.id"))
     is_active = Column(Boolean, default=True)
     mfa_enabled = Column(Boolean, default=False)
     last_login_at = Column(DateTime)
@@ -28,6 +30,7 @@ class User(Base):
 
     # Relationships
     tenant = relationship("Tenant")
+    job_role = relationship("JobRole")
     assessments = relationship("Assessment", back_populates="candidate")
 
 class Game(Base):
@@ -117,6 +120,18 @@ class Report(Base):
 
     # Relationships
     assessment = relationship("Assessment")
+
+class BlacklistedToken(Base):
+    __tablename__ = "blacklisted_tokens"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    token_jti = Column(String(255), unique=True, nullable=False)  # JWT ID
+    user_id = Column(String, ForeignKey("users.id"))
+    blacklisted_at = Column(DateTime, default=func.now())
+    expires_at = Column(DateTime, nullable=False)
+
+    # Relationships
+    user = relationship("User")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

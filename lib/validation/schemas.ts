@@ -41,6 +41,7 @@ export const updateUserSchema = z.object({
 export const createJobRoleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
+  requirements: z.string().optional(),
   traitsJson: z.string().refine((val) => {
     try {
       JSON.parse(val);

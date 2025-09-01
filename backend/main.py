@@ -9,6 +9,7 @@ from routers.job_roles import router as job_roles_router
 from routers.candidates import router as candidates_router
 from routers.telemetry import router as telemetry_router
 from routers.reports import router as reports_router
+from routers.admin import router as admin_router
 
 # Try to create database tables
 try:
@@ -43,6 +44,7 @@ app.include_router(job_roles_router, prefix="/job-roles", tags=["Job Roles"])
 app.include_router(candidates_router, prefix="/candidates", tags=["Candidates"])
 app.include_router(telemetry_router, prefix="/telemetry", tags=["Telemetry"])
 app.include_router(reports_router, prefix="/reports", tags=["Reports"])
+app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 
 @app.get("/")
 async def root():
