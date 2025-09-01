@@ -1,106 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { executeQuery, generateId } from '@/lib/db/postgres';
-import { verifyAccessToken, hashPassword, generateRandomPassword } from '@/lib/auth/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const payload = verifyAccessToken(token);
-    if (!payload || payload.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
+    // Forward request to FastAPI backend
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    
+    // Get authorization header from the request
+    const authHeader = request.headers.get('authorization');
+    
+    // Build the backend URL with query parameters
     const url = new URL(request.url);
-    const isActive = url.searchParams.get('is_active');
+    const searchParams = url.searchParams;
+    const backendEndpoint = `${backendUrl}/admin/candidates?${searchParams.toString()}`;
     
-    let query = `
-      SELECT u.id, u.username, u.email, u.is_active, u.created_at, u.last_login_at,
-             cp.full_name, jr.title as job_role_title
-      FROM users u
-      LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
-      LEFT JOIN job_roles jr ON cp.job_role_id = jr.id
-      WHERE u.role = 'CANDIDATE'
-    `;
-    
-    const params: any[] = [];
-    if (isActive !== null) {
-      query += ' AND u.is_active = $1';
-      params.push(isActive === 'true');
-    }
-    
-    query += ' ORDER BY u.created_at DESC';
+    const response = await fetch(backendEndpoint, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader && { 'Authorization': authHeader }),
+      },
+    });
 
-    const result = await executeQuery(query, params);
-    return NextResponse.json(result.rows);
+    if (!response.ok) {
+      console.error('Backend candidates error:', response.status, response.statusText);
+      return NextResponse.json([], { status: response.status });
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error fetching candidates:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Candidates API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const payload = verifyAccessToken(token);
-    if (!payload || payload.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const { email, full_name, username } = await request.json();
-
-    // Check if email already exists
-    const existingUser = await executeQuery(
-      'SELECT id FROM users WHERE email = $1',
-      [email]
-    );
+    // Forward request to FastAPI backend
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     
-    if (existingUser.rows.length > 0) {
-      return NextResponse.json({ error: 'Email already exists' }, { status: 400 });
+    // Get authorization header from the request
+    const authHeader = request.headers.get('authorization');
+    const body = await request.json();
+    
+    const response = await fetch(`${backendUrl}/admin/candidates`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader && { 'Authorization': authHeader }),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.error('Backend create candidate error:', response.status, response.statusText);
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      return NextResponse.json(errorData, { status: response.status });
     }
 
-    // Generate password and user ID
-    const password = generateRandomPassword(8);
-    const userId = generateId();
-    const passwordHash = await hashPassword(password);
-
-    // Get default tenant
-    const tenantResult = await executeQuery('SELECT id FROM tenants LIMIT 1');
-    const tenantId = tenantResult.rows[0]?.id || 'default-tenant';
-
-    // Create user
-    await executeQuery(
-      `INSERT INTO users (id, tenant_id, username, email, password_hash, role, is_active, created_at)
-       VALUES ($1, $2, $3, $4, $5, 'CANDIDATE', true, NOW())`,
-      [userId, tenantId, username, email, passwordHash]
-    );
-
-    // Create candidate profile
-    await executeQuery(
-      `INSERT INTO candidate_profiles (user_id, full_name, created_at)
-       VALUES ($1, $2, NOW())`,
-      [userId, full_name]
-    );
-
-    return NextResponse.json({
-      message: 'Candidate created successfully',
-      candidate: {
-        id: userId,
-        username,
-        email,
-        full_name,
-        password
-      }
-    });
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error creating candidate:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Create candidate API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
